@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
@@ -25,17 +26,10 @@ var (
 )
 
 var (
-	kubernetesCounterVec      *prometheus.CounterVec
-	metricsAddr               string
-	kubeAPI                   bool
-	nodeName                  string
-	prometheusContainerLabels = map[string]string{
-		"io.kubernetes.container.name": "container_name",
-		"io.kubernetes.pod.namespace":  "namespace",
-		"io.kubernetes.pod.uid":        "pod_uid",
-		"io.kubernetes.pod.name":       "pod_name",
-	}
-	// dockerClient *docker_client.Client
+	kubernetesCounterVec *prometheus.CounterVec
+	metricsAddr          string
+	kubeAPI              bool
+	nodeName             string
 )
 
 func init() {
@@ -59,7 +53,14 @@ func main() {
 		panic(err.Error())
 	}
 
-	labels := []string{"pod_name", "node_name", "namespace", "unit", "container_name"}
+	labels := []string{
+		"pod_name",
+		"node_name",
+		"namespace",
+		"container_name",
+		"pod_uuid",
+		"unit",
+	}
 	// labels =
 
 	kubernetesCounterVec = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -81,7 +82,6 @@ func main() {
 	if err != nil {
 		glog.Fatal("Could not create log watcher")
 	}
-	// fmt.Println(logCh)
 
 	for log := range logCh {
 		foundPodUID, foundContainerID := getContainerIDFromLog(log.Message)
@@ -97,15 +97,26 @@ func main() {
 
 				if string(pod.GetUID()) == foundPodUID {
 					glog.Info("Success, found pod by uiid")
-					containerLabels := pod.Labels
+					glog.V(9).Infoln(pod)
+					containerLabels := make(map[string]string)
 					containerLabels["namespace"] = pod.Namespace
 					containerLabels["pod_name"] = pod.Name
+					containerLabels["pod_uuid"] = foundPodUID
 					containerLabels["node_name"] = nodeName
+					if _, ok := pod.Labels["unit"]; ok {
+						containerLabels["unit"] = pod.Labels["unit"]
+					} else {
+						containerLabels["unit"] = ""
+					}
 					for _, c := range pod.Status.ContainerStatuses {
-						if string(c.ContainerID) == foundContainerID {
+						glog.V(9).Infoln(c)
+						if strings.Contains(string(c.ContainerID), foundContainerID) {
 							containerLabels["container_name"] = c.Name
 						}
 
+					}
+					if _, ok := containerLabels["container_name"]; !ok {
+						containerLabels["container_name"] = ""
 					}
 					prometheusCount(containerLabels)
 				}
@@ -114,15 +125,6 @@ func main() {
 				panic(err.Error())
 			}
 		}
-		// } else {
-		// if containerID != "" {
-		// 	container, err := getContainer(containerID, dockerClient)
-		// 	if err != nil {
-		// 		glog.Warningf("Could not get container %s for pod %s: %v", containerID, podUID, err)
-		// 	} else {
-		// 		prometheusCount(container.Config.Labels)
-		// 	}
-		// }
 	}
 }
 
