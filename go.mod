@@ -1,4 +1,6 @@
-module github.com/sapcc/kubernetes-oomkill-exporter
+module github.com/gari/kubernetes-oomkill-exporter
+
+go 1.14
 
 require (
 	code.cloudfoundry.org/clock v0.0.0-20180518195852-02e53af36e6c // indirect
@@ -10,15 +12,10 @@ require (
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.3.3 // indirect
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible
-	github.com/gogo/protobuf v1.1.1 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
-	github.com/google/gofuzz v0.0.0-20170612174753-24818f796faf // indirect
-	github.com/json-iterator/go v1.1.5 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
-	github.com/onsi/ginkgo v1.7.0 // indirect
-	github.com/onsi/gomega v1.4.3 // indirect
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/pkg/errors v0.8.0 // indirect
@@ -27,16 +24,17 @@ require (
 	github.com/prometheus/client_model v0.0.0-20180712105110-5c3871d89910 // indirect
 	github.com/prometheus/common v0.0.0-20181126121408-4724e9255275 // indirect
 	github.com/prometheus/procfs v0.0.0-20181126161756-619930b0b471 // indirect
-	github.com/spf13/pflag v1.0.3 // indirect
-	github.com/stretchr/testify v1.2.2
+	github.com/stretchr/testify v1.4.0
 	github.com/tedsuo/ifrit v0.0.0-20180802180643-bea94bb476cc // indirect
-	golang.org/x/net v0.0.0-20181114220301-adae6a3d119a
-	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f // indirect
-	golang.org/x/sys v0.0.0-20181128092732-4ed8d59d0b35 // indirect
+	golang.org/x/crypto v0.0.0-20200302210943-78000ba7a073 // indirect
+	golang.org/x/net v0.0.0-20191004110552-13f9640d40b9
+	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d // indirect
+	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/api v0.0.0-20181121071145-b7bd5f2d334c // indirect
-	k8s.io/apimachinery v0.0.0-20181126191516-4a9a8137c0a1 // indirect
-	k8s.io/klog v0.1.0 // indirect
+	k8s.io/api v0.17.3 // indirect
+	k8s.io/apimachinery v0.17.3
+	k8s.io/client-go v0.17.0
 	k8s.io/node-problem-detector v0.6.0
+	k8s.io/utils v0.0.0-20200229041039-0a110f9eb7ab // indirect
 	sigs.k8s.io/yaml v1.1.0 // indirect
 )
