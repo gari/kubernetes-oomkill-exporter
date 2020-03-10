@@ -3,52 +3,65 @@ package main
 import (
 	"flag"
 	"net/http"
+	"os"
 	"regexp"
-	"strings"
 
-	docker_client "docker.io/go-docker"
-	docker_types "docker.io/go-docker/api/types"
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"golang.org/x/net/context"
+
+	// "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+
 	"k8s.io/node-problem-detector/pkg/systemlogmonitor/logwatchers/kmsg"
 	"k8s.io/node-problem-detector/pkg/systemlogmonitor/logwatchers/types"
 )
 
 var (
-	kmesgRE = regexp.MustCompile(`/pod(\w+-\w+-\w+-\w+-\w+)/([a-f0-9]+) killed as a result of limit of /kubepods`)
+	kmesgRE        = regexp.MustCompile(`/pod(\w+-\w+-\w+-\w+-\w+)/([a-f0-9]+) killed as a result of limit of /kubepods`)
+	kmesgREkernel5 = regexp.MustCompile(`/pod(\w+-\w+-\w+-\w+-\w+)/([a-f0-9]+),task`)
 )
 
 var (
 	kubernetesCounterVec      *prometheus.CounterVec
+	metricsAddr               string
+	kubeAPI                   bool
+	nodeName                  string
 	prometheusContainerLabels = map[string]string{
 		"io.kubernetes.container.name": "container_name",
 		"io.kubernetes.pod.namespace":  "namespace",
 		"io.kubernetes.pod.uid":        "pod_uid",
 		"io.kubernetes.pod.name":       "pod_name",
 	}
-	metricsAddr  string
-	dockerClient *docker_client.Client
+	// dockerClient *docker_client.Client
 )
 
 func init() {
-	var err error
+	// var err error
 	flag.StringVar(&metricsAddr, "listen-address", ":9102", "The address to listen on for HTTP requests.")
-	dockerClient, err = docker_client.NewEnvClient()
-	if err != nil {
-		glog.Fatal(err)
-	}
-	dockerClient.NegotiateAPIVersion(context.Background())
+	flag.BoolVar(&kubeAPI, "kube-api", false, "Use of kube api instead of docker socket")
 }
 
 func main() {
 	flag.Parse()
 
-	var labels []string
-	for _, label := range prometheusContainerLabels {
-		labels = append(labels, strings.Replace(label, ".", "_", -1))
+	nodeName = os.Getenv("NODE_NAME")
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		panic(err.Error())
 	}
+	// creates the clientset
+	clientset, err := kubernetes.NewForConfig(config)
+
+	if err != nil {
+		panic(err.Error())
+	}
+
+	labels := []string{"pod_name", "node_name", "namespace", "unit", "container_name"}
+	// labels =
+
 	kubernetesCounterVec = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "klog_pod_oomkill",
 		Help: "Extract metrics for OOMKilled pods from kernel log",
@@ -68,49 +81,68 @@ func main() {
 	if err != nil {
 		glog.Fatal("Could not create log watcher")
 	}
+	// fmt.Println(logCh)
 
 	for log := range logCh {
-		podUID, containerID := getContainerIDFromLog(log.Message)
-		if containerID != "" {
-			container, err := getContainer(containerID, dockerClient)
+		foundPodUID, foundContainerID := getContainerIDFromLog(log.Message)
+		if foundContainerID != "" && foundPodUID != "" {
+			glog.Info("foundContainerID: " + foundContainerID)
+			glog.Info("foundPodUID: " + foundPodUID)
+			glog.Info("Try to use kube api to find pod")
+			pods, _ := clientset.CoreV1().Pods("").List(metav1.ListOptions{
+				FieldSelector: "spec.nodeName=" + nodeName,
+			})
+
+			for _, pod := range pods.Items {
+
+				if string(pod.GetUID()) == foundPodUID {
+					glog.Info("Success, found pod by uiid")
+					containerLabels := pod.Labels
+					containerLabels["namespace"] = pod.Namespace
+					containerLabels["pod_name"] = pod.Name
+					containerLabels["node_name"] = nodeName
+					for _, c := range pod.Status.ContainerStatuses {
+						if string(c.ContainerID) == foundContainerID {
+							containerLabels["container_name"] = c.Name
+						}
+
+					}
+					prometheusCount(containerLabels)
+				}
+			}
 			if err != nil {
-				glog.Warningf("Could not get container %s for pod %s: %v", containerID, podUID, err)
-			} else {
-				prometheusCount(container.Config.Labels)
+				panic(err.Error())
 			}
 		}
+		// } else {
+		// if containerID != "" {
+		// 	container, err := getContainer(containerID, dockerClient)
+		// 	if err != nil {
+		// 		glog.Warningf("Could not get container %s for pod %s: %v", containerID, podUID, err)
+		// 	} else {
+		// 		prometheusCount(container.Config.Labels)
+		// 	}
+		// }
 	}
 }
 
 func getContainerIDFromLog(log string) (string, string) {
+	// fmt.Println("Log: " + log)
 	if matches := kmesgRE.FindStringSubmatch(log); matches != nil {
 		return matches[1], matches[2]
 	}
-
-	return "", ""
-}
-
-func getContainer(containerID string, cli *docker_client.Client) (docker_types.ContainerJSON, error) {
-	container, err := cli.ContainerInspect(context.Background(), containerID)
-	if err != nil {
-		return docker_types.ContainerJSON{}, err
+	if matches := kmesgREkernel5.FindStringSubmatch(log); matches != nil {
+		return matches[1], matches[2]
 	}
-	return container, nil
-
+	return "", ""
 }
 
 func prometheusCount(containerLabels map[string]string) {
 	var counter prometheus.Counter
 	var err error
 
-	var labels map[string]string
-	labels = make(map[string]string)
-	for key, label := range prometheusContainerLabels {
-		labels[label] = containerLabels[key]
-	}
-
-	glog.V(5).Infof("Labels: %v\n", labels)
-	counter, err = kubernetesCounterVec.GetMetricWith(labels)
+	glog.V(5).Infof("Labels: %v\n", containerLabels)
+	counter, err = kubernetesCounterVec.GetMetricWith(containerLabels)
 
 	if err != nil {
 		glog.Warning(err)
