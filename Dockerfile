@@ -13,10 +13,10 @@ RUN go build -v -o /kubernetes-oomkill-exporter
 RUN go test -v
 # RUN go vet
 
-FROM alpine:3.8
+FROM scratch
 LABEL maintainer="garillka@gmail.com"
 
-RUN apk --no-cache add ca-certificates
+# RUN apk --no-cache add ca-certificates
 # COPY ./kubernetes-oomkill-exporter /kubernetes-oomkill-exporter
 COPY --from=builder /kubernetes-oomkill-exporter /kubernetes-oomkill-exporter
 
