@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 
+	"context"
+
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -40,6 +42,8 @@ func init() {
 
 func main() {
 	flag.Parse()
+
+	ctx := context.Background()
 
 	nodeName = os.Getenv("NODE_NAME")
 	config, err := rest.InClusterConfig()
@@ -89,8 +93,10 @@ func main() {
 			glog.Info("foundContainerID: " + foundContainerID)
 			glog.Info("foundPodUID: " + foundPodUID)
 			glog.Info("Try to use kube api to find pod")
-			pods, _ := clientset.CoreV1().Pods("").List(metav1.ListOptions{
-				FieldSelector: "spec.nodeName=" + nodeName,
+			pods, _ := clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+				FieldSelector:        "spec.nodeName=" + nodeName,
+				ResourceVersion:      "0",
+				ResourceVersionMatch: "NotOlderThan",
 			})
 
 			for _, pod := range pods.Items {

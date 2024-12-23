@@ -1,7 +1,7 @@
 TARGET = kubernetes-oomkill-exporter
 GOTARGET = github.com/gari/$(TARGET)
 REGISTRY ?= gari123
-VERSION ?= 0.1.0
+VERSION ?= 0.1.2
 IMAGE = $(REGISTRY)/$(BIN)
 DOCKER ?= docker
 

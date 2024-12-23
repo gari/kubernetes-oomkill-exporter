@@ -1,4 +1,4 @@
-FROM golang:1.14 AS builder
+FROM golang:1.23 AS builder
 
 WORKDIR /go/src/github.com/gari/kuberntes-oomkill-exporter
 ENV CGO_ENABLED=0 \
